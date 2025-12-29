@@ -31,13 +31,15 @@ func fetchDataWithRetry(url string) (*http.Response, error) {
 			return nil, err
 		}
 
-		if resp.StatusCode == 429 && retries < maxRetries {
+		if resp.StatusCode == 429 && retries < maxRetries-1 {
 			fmt.Printf("Failed to fetch data from %s. Status code 429. Retrying in 2 seconds...\n", url)
+			resp.Body.Close()
 			time.Sleep(2 * time.Second)
 			continue
 		}
 
 		if resp.StatusCode != 200 && resp.StatusCode != 429 {
+			resp.Body.Close()
 			return nil, fmt.Errorf("Failed to fetch data from %s. Status code %d, ", url, resp.StatusCode)
 		}
 

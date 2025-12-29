@@ -157,19 +157,25 @@ func nodeToItemsWithoutEndDate(root *html.Node, maxItems int) chan Item {
 			} else if divPossibleAttrs.class != "" {
 				switch divPossibleAttrs.class {
 				case "game_genre":
-					cell.Genre = node.FirstChild.Data
+					if node.FirstChild != nil {
+						cell.Genre = node.FirstChild.Data
+					}
 				case "game_author":
-					cell.Author = node.FirstChild.FirstChild.Data
+					if node.FirstChild != nil && node.FirstChild.FirstChild != nil {
+						cell.Author = node.FirstChild.FirstChild.Data
+					}
 				case "game_text":
-					cell.Description = node.FirstChild.Data
+					if node.FirstChild != nil {
+						cell.Description = node.FirstChild.Data
+					}
 				case "sale_tag":
-					if node.FirstChild.Data != "-100%" {
+					if node.FirstChild != nil && node.FirstChild.Data != "-100%" {
 						continueTillNextGame = true
 						cell.ID = ""
 					}
 				// cuz yes, reverse sales are a thing in itch.io
 				case "sale_tag reverse_sale":
-					if node.FirstChild.Data != "-100%" {
+					if node.FirstChild != nil && node.FirstChild.Data != "-100%" {
 						continueTillNextGame = true
 						cell.ID = ""
 					}
@@ -181,7 +187,9 @@ func nodeToItemsWithoutEndDate(root *html.Node, maxItems int) chan Item {
 				switch aPossibleAttrs.class {
 				case "title game_link":
 					cell.Link = aPossibleAttrs.href
-					cell.Title = node.FirstChild.Data
+					if node.FirstChild != nil {
+						cell.Title = node.FirstChild.Data
+					}
 				case "price_tag meta_tag sale":
 					cell.SalesLink = aPossibleAttrs.href
 				}
@@ -240,6 +248,17 @@ func parseEndDate(body string) string {
 	regx = regexp.MustCompile(`[0-9]+-[^\"]*`)
 	matches = regx.FindStringSubmatch(matches[0])
 
+	if len(matches) == 0 {
+		fmt.Printf(`
+		Function: parseEndDate
+		Context:
+		- body: %s
+
+		Error: Could not extract date from end_date field.
+		`, body)
+		return "Could not extract date from end_date field. Please report this bug to https://github.com/VReactor/discount-itch/issues"
+	}
+
 	return matches[0]
 }
 
@@ -262,7 +281,7 @@ func ConvertContentToItems(content Content) (chan Item, error) {
 	}
 
 	partialItems := nodeToItemsWithoutEndDate(node, content.NumItems)
-	items := make(chan Item, len(partialItems))
+	items := make(chan Item, content.NumItems)
 
 	defer close(items)
 
