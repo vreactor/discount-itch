@@ -3,6 +3,7 @@ package ditch
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -262,8 +263,39 @@ func parseEndDate(body string) string {
 	return matches[0]
 }
 
+// parseTotalRatingsFromGamePage extracts the rating count from the HTML body of a game page.
+// It looks for an element with itemprop="ratingCount" and extracts the value from the content attribute.
+func parseTotalRatingsFromGamePage(body string) int {
+	reader := strings.NewReader(body)
+	node, err := html.Parse(reader)
+	if err != nil {
+		return 0
+	}
+
+	nodes := getPreOrderQueue(node)
+	for _, n := range nodes {
+		var hasRatingCountItemprop bool
+		var contentValue string
+		for _, attr := range n.Attr {
+			if attr.Key == "itemprop" && attr.Val == "ratingCount" {
+				hasRatingCountItemprop = true
+			}
+			if attr.Key == "content" {
+				contentValue = attr.Val
+			}
+		}
+		if hasRatingCountItemprop && contentValue != "" {
+			if totalRatings, err := strconv.Atoi(contentValue); err == nil {
+				return totalRatings
+			}
+		}
+	}
+	return 0
+}
+
 // ConvertContentToItems converts a Content to a channel full of Item.
 // Only the Items at -100% sales will be kept.
+// Only the Items with rating_count > 100 will be kept.
 // It also does the needed API calls to get the end date for each Item.
 // It may return an error if any arises.
 func ConvertContentToItems(content Content) (chan Item, error) {
@@ -286,6 +318,25 @@ func ConvertContentToItems(content Content) (chan Item, error) {
 	defer close(items)
 
 	for partialItem := range partialItems {
+		gameBody, err := getGame(partialItem.Link)
+		if err != nil {
+			fmt.Printf(`
+			Function: ConvertContentToItems::getGame
+			Context:
+			- link: %s
+
+			Error: %s
+			`, partialItem.Link, err)
+			// Skip this item as we cannot determine its rating count
+			continue
+		}
+
+		partialItem.RatingCount = parseTotalRatingsFromGamePage(gameBody)
+
+		if partialItem.RatingCount <= 100 {
+			continue
+		}
+
 		body, err := getSales(partialItem.SalesLink)
 		if err != nil {
 			fmt.Printf(`

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -72,6 +73,27 @@ func getJSON(category string, page int) (string, error) {
 // getSales returns the content of a sales page and an error if any.
 func getSales(link string) (string, error) {
 	url := fmt.Sprintf("%s%s", hostname, link)
+	resp, err := fetchDataWithRetry(url)
+
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), nil
+}
+
+// getGame returns the content of a game page and an error if any.
+func getGame(link string) (string, error) {
+	url := link
+	if !strings.HasPrefix(link, "http://") && !strings.HasPrefix(link, "https://") {
+		url = fmt.Sprintf("%s%s", hostname, link)
+	}
 	resp, err := fetchDataWithRetry(url)
 
 	if err != nil {
